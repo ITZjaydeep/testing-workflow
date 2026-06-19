@@ -1,16 +1,61 @@
+name: Test GitHub Release
+
 on:
   push:
     branches:
       - main
+
+permissions:
+  contents: write
 
 jobs:
   release:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-      - run: ./.github/scripts/create-github-release.sh
+      - name: Extract Android Version
+        shell: bash
+        run: |
+          VERSION_NAME=$(grep -oP 'versionName\s*=\s*"\K[^"]+' android/app/build.gradle)
+          VERSION_CODE=$(grep -oP 'versionCode\s*=\s*\K[0-9]+' android/app/build.gradle)
+
+          echo "VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
+          echo "VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
+
+      - name: Generate Release Notes
+        shell: bash
+        run: |
+          {
+            echo "RELEASE_NOTES<<EOF"
+            git log -10 --pretty=format:"- %s"
+            echo
+            echo "EOF"
+          } >> "$GITHUB_ENV"
+
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION_NAME: ${{ env.VERSION_NAME }}
+          VERSION_CODE: ${{ env.VERSION_CODE }}
+          RELEASE_NOTES: ${{ env.RELEASE_NOTES }}
+          PLAY_STORE_LINK: "Not Available"
+        run: ./.github/scripts/create-github-release.sh
+# on:
+#   push:
+#     branches:
+#       - main
+
+# jobs:
+#   release:
+#     runs-on: ubuntu-latest
+
+#     steps:
+#       - uses: actions/checkout@v4
+
+#       - run: ./.github/scripts/create-github-release.sh
 # name: Android Beta Release
 
 # # Manual trigger only — release manager decides when to ship.
