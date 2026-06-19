@@ -19,12 +19,6 @@ jobs:
           fetch-depth: 0
           submodules: false
 
-      - name: Set up JDK
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 17
-
       - name: Extract Android Version
         shell: bash
         run: |
@@ -49,11 +43,7 @@ jobs:
           echo "VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
           echo "VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
 
-          echo "Version Name: $VERSION_NAME"
-          echo "Version Code: $VERSION_CODE"
-
       - name: Generate Release Notes
-        shell: bash
         run: |
           {
             echo "RELEASE_NOTES<<EOF"
