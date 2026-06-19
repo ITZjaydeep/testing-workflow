@@ -15,22 +15,49 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
 
       - name: Extract Android Version
         shell: bash
         run: |
-          VERSION_NAME=$(grep -oP 'versionName\s*=\s*"\K[^"]+' android/app/build.gradle)
-          VERSION_CODE=$(grep -oP 'versionCode\s*=\s*\K[0-9]+' android/app/build.gradle)
+          set +e
+
+          VERSION_NAME=""
+          VERSION_CODE=""
+
+          if [ -f "android/app/build.gradle" ]; then
+            VERSION_NAME=$(grep -oP 'versionName\s*=?\s*"\K[^"]+' android/app/build.gradle | head -1)
+            VERSION_CODE=$(grep -oP 'versionCode\s*=?\s*\K[0-9]+' android/app/build.gradle | head -1)
+          fi
+
+          if [ -z "$VERSION_NAME" ] && [ -f "android/app/build.gradle.kts" ]; then
+            VERSION_NAME=$(grep -oP 'versionName\s*=\s*"\K[^"]+' android/app/build.gradle.kts | head -1)
+            VERSION_CODE=$(grep -oP 'versionCode\s*=\s*\K[0-9]+' android/app/build.gradle.kts | head -1)
+          fi
+
+          VERSION_NAME=${VERSION_NAME:-0.0.0}
+          VERSION_CODE=${VERSION_CODE:-0}
 
           echo "VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
           echo "VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
+
+          echo "Version Name: $VERSION_NAME"
+          echo "Version Code: $VERSION_CODE"
 
       - name: Generate Release Notes
         shell: bash
         run: |
           {
             echo "RELEASE_NOTES<<EOF"
-            git log -10 --pretty=format:"- %s"
+            git log --pretty=format:"- %s" -20
             echo
             echo "EOF"
           } >> "$GITHUB_ENV"
@@ -41,7 +68,7 @@ jobs:
           VERSION_NAME: ${{ env.VERSION_NAME }}
           VERSION_CODE: ${{ env.VERSION_CODE }}
           RELEASE_NOTES: ${{ env.RELEASE_NOTES }}
-          PLAY_STORE_LINK: "Not Available"
+          PLAY_STORE_LINK: Not Available
         run: ./.github/scripts/create-github-release.sh
 # on:
 #   push:
