@@ -19,6 +19,18 @@ jobs:
           fetch-depth: 0
           submodules: false
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Google APIs Library
+        run: |
+          npm install googleapis
+
+      - name: Install Dependencies
+        run: npm ci
+
       - name: Extract Android Version
         shell: bash
         run: |
@@ -76,110 +88,207 @@ jobs:
           RELEASE_NOTES: ${{ env.RELEASE_NOTES }}
           PLAY_STORE_LINK: Not Available
         run: ./.github/scripts/create-github-release.sh
+
+      - name: Append Release to Google Sheets
+        env:
+          GOOGLE_SERVICE_ACCOUNT: ${{ secrets.GOOGLE_SERVICE_ACCOUNT }}
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+
+          VERSION_NAME: ${{ env.VERSION_NAME }}
+          VERSION_CODE: ${{ env.VERSION_CODE }}
+          RELEASE_NOTES: ${{ env.RELEASE_NOTES }}
+
+          PLAY_STORE_LINK: Not Available
+
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_SERVER_URL: ${{ github.server_url }}
+        run: node .github/scripts/append-google-sheet.js
+# name: Test GitHub Release
+
 # on:
 #   push:
 #     branches:
 #       - main
+
+# permissions:
+#   contents: write
 
 # jobs:
 #   release:
 #     runs-on: ubuntu-latest
 
 #     steps:
-#       - uses: actions/checkout@v4
-
-#       - run: ./.github/scripts/create-github-release.sh
-# name: Android Beta Release
-
-# # Manual trigger only — release manager decides when to ship.
-# on:
-#   workflow_dispatch:
-#     inputs:
-#       lane:
-#         description: "Fastlane lane to run"
-#         required: true
-#         default: "beta"
-#         type: choice
-#         options:
-#           - beta
-
-# jobs:
-#   android-beta:
-#     name: Build & Upload Android Beta (Internal Testing)
-#     runs-on: ubuntu-latest
-#     timeout-minutes: 45
-
-#     steps:
-#       # 1. Checkout latest "main"
-#       - name: Checkout main
+#       - name: Checkout Repository
 #         uses: actions/checkout@v4
 #         with:
-#           ref: main
 #           fetch-depth: 0
+#           submodules: false
 
-#       # 2. Configure Android build environment
-#       - name: Set up JDK 17
-#         uses: actions/setup-java@v4
-#         with:
-#           distribution: temurin
-#           java-version: "17"
-
-#       - name: Set up Node.js
-#         uses: actions/setup-node@v4
-#         with:
-#           node-version: "24"
-#           cache: "yarn"
-
-#       - name: Set up Ruby (for Fastlane)
-#         uses: ruby/setup-ruby@v1
-#         with:
-#           ruby-version: "3.2"
-#           bundler-cache: true
-#           working-directory: android
-
-#       # 3. Install project dependencies
-#       - name: Install JS dependencies
-#         run: yarn install --frozen-lockfile 
-
-#       # 4. Install Fastlane
-#       - name: Install Fastlane
-#         working-directory: android
-#         run: bundle install
-
-#       # Decode signing & service-account secrets
-#       - name: Decode Android keystore
-#         working-directory: android
+#       - name: Extract Android Version
+#         shell: bash
 #         run: |
-#           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > app/release.keystore
+#           set +e
 
-#       - name: Decode Google Play service account JSON
+#           VERSION_NAME=""
+#           VERSION_CODE=""
+
+#           if [ -f "android/app/build.gradle" ]; then
+#             VERSION_NAME=$(grep -oP 'versionName\s*=?\s*"\K[^"]+' android/app/build.gradle | head -1)
+#             VERSION_CODE=$(grep -oP 'versionCode\s*=?\s*\K[0-9]+' android/app/build.gradle | head -1)
+#           fi
+
+#           if [ -z "$VERSION_NAME" ] && [ -f "android/app/build.gradle.kts" ]; then
+#             VERSION_NAME=$(grep -oP 'versionName\s*=\s*"\K[^"]+' android/app/build.gradle.kts | head -1)
+#             VERSION_CODE=$(grep -oP 'versionCode\s*=\s*\K[0-9]+' android/app/build.gradle.kts | head -1)
+#           fi
+
+#           VERSION_NAME=${VERSION_NAME:-0.0.0}
+#           VERSION_CODE=${VERSION_CODE:-0}
+
+#           echo "VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
+#           echo "VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
+
+#       - name: Generate Release Notes
+#         shell: bash
 #         run: |
-#           echo "${{ secrets.PLAY_STORE_SERVICE_ACCOUNT_JSON_BASE64 }}" | base64 --decode > play-store-credentials.json
+#           PREVIOUS_TAG=$(git tag --sort=-creatordate | head -n 1)
 
-#       # 5 & 6. Build AAB and upload to Internal Testing — handled by Fastlane
-#       # - name: Run Fastlane beta lane
-#       #   working-directory: android
-#       #   env:
-#       #     ANDROID_KEYSTORE_PATH: release.keystore
-#       #     ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-#       #     ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-#       #     ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-#       #     PLAY_STORE_JSON_KEY_PATH: ../play-store-credentials.json
-#       #   run: bundle exec fastlane beta
+#           if [ -n "$PREVIOUS_TAG" ]; then
+#             echo "Previous tag: $PREVIOUS_TAG"
 
-#       # Clean up secrets from disk
-#       - name: Clean up sensitive files
-#         if: always()
-#         working-directory: android
-#         run: |
-#           rm -f app/release.keystore
-#           rm -f ../play-store-credentials.json
+#             {
+#               echo "RELEASE_NOTES<<EOF"
+#               git log "${PREVIOUS_TAG}..HEAD" --pretty=format:"- %s"
+#               echo
+#               echo "EOF"
+#             } >> "$GITHUB_ENV"
+#           else
+#             echo "No previous tag found."
 
-#       - name: Upload build artifacts
-#         if: success()
-#         uses: actions/upload-artifact@v4
-#         with:
-#           name: android-aab
-#           path: android/app/build/outputs/bundle/release/*.aab
-#           retention-days: 14
-# # s
+#             {
+#               echo "RELEASE_NOTES<<EOF"
+#               git log --pretty=format:"- %s"
+#               echo
+#               echo "EOF"
+#             } >> "$GITHUB_ENV"
+#           fi
+
+#       - name: Create GitHub Release
+#         env:
+#           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#           VERSION_NAME: ${{ env.VERSION_NAME }}
+#           VERSION_CODE: ${{ env.VERSION_CODE }}
+#           RELEASE_NOTES: ${{ env.RELEASE_NOTES }}
+#           PLAY_STORE_LINK: Not Available
+#         run: ./.github/scripts/create-github-release.sh
+# # on:
+# #   push:
+# #     branches:
+# #       - main
+
+# # jobs:
+# #   release:
+# #     runs-on: ubuntu-latest
+
+# #     steps:
+# #       - uses: actions/checkout@v4
+
+# #       - run: ./.github/scripts/create-github-release.sh
+# # name: Android Beta Release
+
+# # # Manual trigger only — release manager decides when to ship.
+# # on:
+# #   workflow_dispatch:
+# #     inputs:
+# #       lane:
+# #         description: "Fastlane lane to run"
+# #         required: true
+# #         default: "beta"
+# #         type: choice
+# #         options:
+# #           - beta
+
+# # jobs:
+# #   android-beta:
+# #     name: Build & Upload Android Beta (Internal Testing)
+# #     runs-on: ubuntu-latest
+# #     timeout-minutes: 45
+
+# #     steps:
+# #       # 1. Checkout latest "main"
+# #       - name: Checkout main
+# #         uses: actions/checkout@v4
+# #         with:
+# #           ref: main
+# #           fetch-depth: 0
+
+# #       # 2. Configure Android build environment
+# #       - name: Set up JDK 17
+# #         uses: actions/setup-java@v4
+# #         with:
+# #           distribution: temurin
+# #           java-version: "17"
+
+# #       - name: Set up Node.js
+# #         uses: actions/setup-node@v4
+# #         with:
+# #           node-version: "24"
+# #           cache: "yarn"
+
+# #       - name: Set up Ruby (for Fastlane)
+# #         uses: ruby/setup-ruby@v1
+# #         with:
+# #           ruby-version: "3.2"
+# #           bundler-cache: true
+# #           working-directory: android
+
+# #       # 3. Install project dependencies
+# #       - name: Install JS dependencies
+# #         run: yarn install --frozen-lockfile 
+
+# #       # 4. Install Fastlane
+# #       - name: Install Fastlane
+# #         working-directory: android
+# #         run: bundle install
+
+# #       # Decode signing & service-account secrets
+# #       - name: Decode Android keystore
+# #         working-directory: android
+# #         run: |
+# #           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > app/release.keystore
+
+# #       - name: Decode Google Play service account JSON
+# #         run: |
+# #           echo "${{ secrets.PLAY_STORE_SERVICE_ACCOUNT_JSON_BASE64 }}" | base64 --decode > play-store-credentials.json
+
+# #       # 5 & 6. Build AAB and upload to Internal Testing — handled by Fastlane
+# #       # - name: Run Fastlane beta lane
+# #       #   working-directory: android
+# #       #   env:
+# #       #     ANDROID_KEYSTORE_PATH: release.keystore
+# #       #     ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+# #       #     ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+# #       #     ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+# #       #     PLAY_STORE_JSON_KEY_PATH: ../play-store-credentials.json
+# #       #   run: bundle exec fastlane beta
+
+# #       # Clean up secrets from disk
+# #       - name: Clean up sensitive files
+# #         if: always()
+# #         working-directory: android
+# #         run: |
+# #           rm -f app/release.keystore
+# #           rm -f ../play-store-credentials.json
+
+# #       - name: Upload build artifacts
+# #         if: success()
+# #         uses: actions/upload-artifact@v4
+# #         with:
+# #           name: android-aab
+# #           path: android/app/build/outputs/bundle/release/*.aab
+# #           retention-days: 14
+# # # s
