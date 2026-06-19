@@ -30,16 +30,14 @@ fi
 PLAY_STORE_LINK="${PLAY_STORE_LINK:-Not Available}"
 
 TAG="android-v${VERSION_NAME}-${VERSION_CODE}"
-
 TITLE="Android ${VERSION_NAME} (${VERSION_CODE})"
 
 WORKFLOW_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-
 COMMIT_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA}"
 
 DATE=$(date -u +"%d %b %Y %H:%M UTC")
 
-cat <<EOF > release_notes.md
+cat > release_notes.md <<EOF
 # 🚀 Android Internal Testing Release
 
 ---
@@ -85,20 +83,43 @@ ${COMMIT_URL}
 ### Google Play Internal Testing
 
 ${PLAY_STORE_LINK}
-
 EOF
 
-echo "Creating GitHub Release..."
+echo "======================================="
+echo "Processing GitHub Release..."
+echo "======================================="
 
-gh release create "${TAG}" \
-    --title "${TITLE}" \
-    --notes-file release_notes.md
+if gh release view "${TAG}" >/dev/null 2>&1; then
+    echo "ℹ️ Release '${TAG}' already exists."
+
+    echo "Updating release..."
+
+    gh release edit "${TAG}" \
+        --title "${TITLE}" \
+        --notes-file release_notes.md
+
+    STATUS="Updated"
+
+else
+    echo "Creating new release..."
+
+    gh release create "${TAG}" \
+        --title "${TITLE}" \
+        --notes-file release_notes.md
+
+    STATUS="Created"
+fi
 
 echo ""
 echo "======================================="
-echo "✅ GitHub Release Created Successfully"
+echo "✅ GitHub Release ${STATUS} Successfully"
 echo "======================================="
-echo "Tag      : ${TAG}"
-echo "Version  : ${VERSION_NAME}"
-echo "Build    : ${VERSION_CODE}"
-echo ""
+echo "Tag         : ${TAG}"
+echo "Title       : ${TITLE}"
+echo "Version     : ${VERSION_NAME}"
+echo "Build       : ${VERSION_CODE}"
+echo "Branch      : ${GITHUB_REF_NAME}"
+echo "Commit      : ${GITHUB_SHA}"
+echo "Workflow    : ${WORKFLOW_URL}"
+echo "Play Link   : ${PLAY_STORE_LINK}"
+echo "======================================="
