@@ -44,13 +44,29 @@ jobs:
           echo "VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
 
       - name: Generate Release Notes
+        shell: bash
         run: |
-          {
-            echo "RELEASE_NOTES<<EOF"
-            git log --pretty=format:"- %s" -20
-            echo
-            echo "EOF"
-          } >> "$GITHUB_ENV"
+          PREVIOUS_TAG=$(git tag --sort=-creatordate | head -n 1)
+
+          if [ -n "$PREVIOUS_TAG" ]; then
+            echo "Previous tag: $PREVIOUS_TAG"
+
+            {
+              echo "RELEASE_NOTES<<EOF"
+              git log "${PREVIOUS_TAG}..HEAD" --pretty=format:"- %s"
+              echo
+              echo "EOF"
+            } >> "$GITHUB_ENV"
+          else
+            echo "No previous tag found."
+
+            {
+              echo "RELEASE_NOTES<<EOF"
+              git log --pretty=format:"- %s"
+              echo
+              echo "EOF"
+            } >> "$GITHUB_ENV"
+          fi
 
       - name: Create GitHub Release
         env:
