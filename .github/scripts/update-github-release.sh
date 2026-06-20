@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-TAG="${PLATFORM}-v${VERSION_NAME}+${BUILD_NUMBER}"
+TAG="${PLATFORM}-v${VERSION_NAME}-${BUILD_NUMBER}"
 
 echo "Updating GitHub Release: ${TAG}"
 
