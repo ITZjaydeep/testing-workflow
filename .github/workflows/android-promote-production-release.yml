@@ -1,0 +1,80 @@
+name: Android Promote to Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "PROMOTE" to confirm production release'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  promote:
+    name: Promote Android Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    environment: production
+
+    steps:
+      - name: Validate confirmation
+        run: |
+          if [ "${{ github.event.inputs.confirm }}" != "PROMOTE" ]; then
+            echo "❌ Confirmation failed."
+            exit 1
+          fi
+
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Make scripts executable
+        run: chmod +x .github/scripts/*.sh
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.2"
+          bundler-cache: true
+          working-directory: android
+
+      - name: Install Fastlane
+        working-directory: android
+        run: bundle install
+
+      - name: Decode Google Play service account JSON
+        run: |
+          echo "${{ secrets.PLAY_STORE_SERVICE_ACCOUNT_JSON_BASE64 }}" | base64 --decode > play-store-credentials.json
+
+      - name: Promote Internal Testing Release to Production
+        working-directory: android
+        env:
+          PLAY_STORE_JSON_KEY_PATH: ../play-store-credentials.json
+        run: bundle exec fastlane promote_to_production
+
+      - name: Extract Android Version
+        run: ./.github/scripts/extract-android-version.sh
+
+      - name: Update GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PLATFORM: android
+          VERSION_NAME: ${{ env.VERSION_NAME }}
+          BUILD_NUMBER: ${{ env.BUILD_NUMBER }}
+        run: ./.github/scripts/update-github-release.sh
+
+      - name: Clean up sensitive files
+        if: always()
+        run: |
+          rm -f play-store-credentials.json
