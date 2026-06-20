@@ -4,33 +4,41 @@ set -Eeuo pipefail
 
 ########################################
 # Required Environment Variables
-########################################
 #
+# PLATFORM        -> android | ios
 # VERSION_NAME
-# VERSION_CODE
-# RELEASE_NOTES
-# PLAY_STORE_LINK
+# BUILD_NUMBER
 #
+# Optional
+# RELEASE_NOTES
+# STORE_LINK
 ########################################
 
-if [[ -z "${VERSION_NAME:-}" ]]; then
-  echo "❌ VERSION_NAME is missing"
+required=(
+  PLATFORM
+  VERSION_NAME
+  BUILD_NUMBER
+)
+
+for var in "${required[@]}"; do
+  if [[ -z "${!var:-}" ]]; then
+    echo "❌ Missing required environment variable: ${var}"
+    exit 1
+  fi
+done
+
+PLATFORM=$(echo "$PLATFORM" | tr '[:upper:]' '[:lower:]')
+
+if [[ "$PLATFORM" != "android" && "$PLATFORM" != "ios" ]]; then
+  echo "❌ PLATFORM must be 'android' or 'ios'"
   exit 1
 fi
 
-if [[ -z "${VERSION_CODE:-}" ]]; then
-  echo "❌ VERSION_CODE is missing"
-  exit 1
-fi
+RELEASE_NOTES="${RELEASE_NOTES:-No release notes provided.}"
+STORE_LINK="${STORE_LINK:-Not Available}"
 
-if [[ -z "${RELEASE_NOTES:-}" ]]; then
-  RELEASE_NOTES="No release notes provided."
-fi
-
-PLAY_STORE_LINK="${PLAY_STORE_LINK:-Not Available}"
-
-TAG="android-v${VERSION_NAME}-${VERSION_CODE}"
-TITLE="Android ${VERSION_NAME} (${VERSION_CODE})"
+TAG="${PLATFORM}-v${VERSION_NAME}-${BUILD_NUMBER}"
+TITLE="${PLATFORM^} ${VERSION_NAME} (${BUILD_NUMBER})"
 
 WORKFLOW_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 COMMIT_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA}"
@@ -38,7 +46,7 @@ COMMIT_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA}"
 DATE=$(date -u +"%d %b %Y %H:%M UTC")
 
 cat > release_notes.md <<EOF
-# 🚀 Android Internal Testing Release
+# 🚀 ${TITLE}
 
 ---
 
@@ -46,9 +54,9 @@ cat > release_notes.md <<EOF
 
 | Item | Value |
 |------|-------|
-| Version Name | ${VERSION_NAME} |
-| Version Code | ${VERSION_CODE} |
-| Environment | Internal Testing |
+| Platform | ${PLATFORM^} |
+| Version | ${VERSION_NAME} |
+| Build | ${BUILD_NUMBER} |
 | Status | ✅ Successful |
 | Released At | ${DATE} |
 
@@ -58,6 +66,7 @@ cat > release_notes.md <<EOF
 
 | Item | Value |
 |------|-------|
+| Repository | ${GITHUB_REPOSITORY} |
 | Branch | ${GITHUB_REF_NAME} |
 | Commit | ${GITHUB_SHA} |
 | Triggered By | ${GITHUB_ACTOR} |
@@ -80,46 +89,48 @@ ${WORKFLOW_URL}
 
 ${COMMIT_URL}
 
-### Google Play Internal Testing
+### Store
 
-${PLAY_STORE_LINK}
+${STORE_LINK}
 EOF
 
-echo "======================================="
+echo "========================================"
 echo "Processing GitHub Release..."
-echo "======================================="
+echo "========================================"
 
-if gh release view "${TAG}" >/dev/null 2>&1; then
-    echo "ℹ️ Release '${TAG}' already exists."
+if gh release view "$TAG" >/dev/null 2>&1; then
 
-    echo "Updating release..."
+    echo "Release exists. Updating..."
 
-    gh release edit "${TAG}" \
-        --title "${TITLE}" \
+    gh release edit "$TAG" \
+        --title "$TITLE" \
         --notes-file release_notes.md
 
     STATUS="Updated"
 
 else
-    echo "Creating new release..."
 
-    gh release create "${TAG}" \
-        --title "${TITLE}" \
+    echo "Creating release..."
+
+    gh release create "$TAG" \
+        --title "$TITLE" \
         --notes-file release_notes.md
 
     STATUS="Created"
+
 fi
 
 echo ""
-echo "======================================="
-echo "✅ GitHub Release ${STATUS} Successfully"
-echo "======================================="
+echo "========================================"
+echo "✅ GitHub Release ${STATUS}"
+echo "========================================"
+echo "Platform    : ${PLATFORM}"
 echo "Tag         : ${TAG}"
 echo "Title       : ${TITLE}"
 echo "Version     : ${VERSION_NAME}"
-echo "Build       : ${VERSION_CODE}"
+echo "Build       : ${BUILD_NUMBER}"
 echo "Branch      : ${GITHUB_REF_NAME}"
 echo "Commit      : ${GITHUB_SHA}"
 echo "Workflow    : ${WORKFLOW_URL}"
-echo "Play Link   : ${PLAY_STORE_LINK}"
-echo "======================================="
+echo "Store Link  : ${STORE_LINK}"
+echo "========================================"
