@@ -19,44 +19,16 @@ jobs:
           fetch-depth: 0
           submodules: false
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Install Google APIs Library
-        run: |
-          npm install googleapis
-
-      - name: Install Dependencies
-        run: npm ci
-
-      - name: Extract Android Version
-        shell: bash
-        run: |
-          set +e
-
-          VERSION_NAME=""
-          VERSION_CODE=""
-
-          if [ -f "android/app/build.gradle" ]; then
-            VERSION_NAME=$(grep -oP 'versionName\s*=?\s*"\K[^"]+' android/app/build.gradle | head -1)
-            VERSION_CODE=$(grep -oP 'versionCode\s*=?\s*\K[0-9]+' android/app/build.gradle | head -1)
-          fi
-          
-          VERSION_NAME=${VERSION_NAME:-0.0.0}
-          VERSION_CODE=${VERSION_CODE:-0}
-
-          echo "VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
-          echo "VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
+      - name: Make scripts executable
+        run: chmod +x .github/scripts/*.sh
 
       - name: Generate Release Notes
         shell: bash
         run: |
-          PREVIOUS_TAG=$(git tag --sort=-creatordate | head -n 1)
+          PREVIOUS_TAG=$(git tag --list "android-v*" --sort=-creatordate | head -n 1)
 
           if [ -n "$PREVIOUS_TAG" ]; then
-            echo "Previous tag: $PREVIOUS_TAG"
+            echo "Previous Android tag: $PREVIOUS_TAG"
 
             {
               echo "RELEASE_NOTES<<EOF"
@@ -65,7 +37,7 @@ jobs:
               echo "EOF"
             } >> "$GITHUB_ENV"
           else
-            echo "No previous tag found."
+            echo "No previous Android release found."
 
             {
               echo "RELEASE_NOTES<<EOF"
@@ -78,11 +50,19 @@ jobs:
       - name: Create GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+          PLATFORM: android
+
           VERSION_NAME: ${{ env.VERSION_NAME }}
-          VERSION_CODE: ${{ env.VERSION_CODE }}
+          BUILD_NUMBER: ${{ env.BUILD_NUMBER }}
+
           RELEASE_NOTES: ${{ env.RELEASE_NOTES }}
-          PLAY_STORE_LINK: Not Available
+
+          # Replace this later with your actual Play Console URL if available
+          STORE_LINK: Internal Testing
+
         run: ./.github/scripts/create-github-release.sh
+
 # name: Test GitHub Release
 
 # on:
