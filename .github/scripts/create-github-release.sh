@@ -98,27 +98,12 @@ echo "========================================"
 echo "Processing GitHub Release..."
 echo "========================================"
 
-if gh release view "$TAG" >/dev/null 2>&1; then
-
-    echo "Release exists. Updating..."
-
-    gh release edit "$TAG" \
-        --title "$TITLE" \
-        --notes-file release_notes.md
-
-    STATUS="Updated"
-
-else
-
-    echo "Creating release..."
-
+echo "Creating release..."
     gh release create "$TAG" \
         --title "$TITLE" \
         --notes-file release_notes.md
 
     STATUS="Created"
-
-fi
 
 echo ""
 echo "========================================"
